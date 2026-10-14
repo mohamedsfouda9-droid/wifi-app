@@ -1,3 +1,4 @@
+```yaml
 name: Build Turbo Net APK
 
 on:
@@ -5,6 +6,7 @@ on:
     branches:
       - main
       - master
+
   workflow_dispatch:
 
 permissions:
@@ -16,12 +18,12 @@ concurrency:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build Turbo Net APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Download project files
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Install Java 17
@@ -30,19 +32,42 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Install Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses || true
 
-      - name: Build APK
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Check project files
+        run: |
+          echo "Checking Android project..."
+          test -f settings.gradle || test -f settings.gradle.kts
+          test -f app/build.gradle || test -f app/build.gradle.kts
+          test -f app/src/main/AndroidManifest.xml
+
+      - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK file was not created."
+            exit 1
+          fi
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -51,3 +76,4 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+```
