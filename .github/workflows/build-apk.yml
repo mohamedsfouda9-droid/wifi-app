@@ -14,8 +14,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -24,20 +28,48 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      - name: Locate Android SDK
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install \
+          echo "Checking Android SDK..."
+          test -d "$ANDROID_HOME" || {
+            echo "Android SDK directory not found"
+            exit 1
+          }
+
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager 2>/dev/null | head -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found"
+            exit 1
+          fi
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "Found SDK manager"
+
+      - name: Accept SDK Licenses
+        run: |
+          yes | "$SDKMANAGER" --licenses
+
+      - name: Install Android Packages
+        run: |
+          "$SDKMANAGER" --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Build APK
+      - name: Check Gradle Files
         run: |
-          chmod +x gradlew
+          if [ ! -f "./gradlew" ]; then
+            echo "ERROR: gradlew not found"
+            exit 1
+          fi
+
+          chmod +x ./gradlew
+
+      - name: Build Debug APK
+        run: |
           ./gradlew --no-daemon assembleDebug
 
       - name: Upload APK
@@ -46,3 +78,4 @@ jobs:
           name: Android-APK
           path: "**/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
+          retention-days: 7
