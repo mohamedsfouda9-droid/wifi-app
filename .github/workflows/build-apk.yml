@@ -1,77 +1,62 @@
-name: Build Turbo Net APK
+```yaml
+name: Build Android APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
       - master
 
-  workflow_dispatch:
-
 permissions:
   contents: read
 
-concurrency:
-  group: turbo-net-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
-    name: Build Turbo Net APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      - name: Checkout project
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Java 17
+      - name: Set Up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Set up Android SDK
+      - name: Set Up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses || true
-
-      - name: Install Android SDK packages
+      - name: Install Android SDK Packages
         run: |
-          sdkmanager --sdk_root="$ANDROID_HOME" \
+          sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Check project files
+      - name: Grant Gradle Permission
         run: |
-          echo "Checking Android project..."
-          test -f settings.gradle || test -f settings.gradle.kts
-          test -f app/build.gradle || test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
 
-      - name: Build debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
-
-      - name: Verify APK
+      - name: Build Debug APK
         run: |
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK file was not created."
+          if [ -f "./gradlew" ]; then
+            ./gradlew --no-daemon assembleDebug
+          else
+            echo "ERROR: gradlew not found in repository root."
+            echo "Upload the complete Android project, including gradlew."
             exit 1
           fi
-          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: TurboNet-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Android-APK
+          path: |
+            **/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
+```
